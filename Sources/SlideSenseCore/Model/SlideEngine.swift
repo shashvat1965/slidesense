@@ -43,6 +43,8 @@ public protocol SlideEngineDelegate: AnyObject {
 /// The engine is deliberately free of AppKit: it is fed `TouchFrame`s and
 /// emits semantic events, which makes the messy part unit-testable.
 public final class SlideEngine {
+    private static let contactDropGrace: TimeInterval = 0.12
+
     public weak var delegate: SlideEngineDelegate?
 
     /// Live configuration (levels are read when a slide begins).
@@ -58,6 +60,7 @@ public final class SlideEngine {
     }
 
     private struct Gesture {
+        let contactID: Int32
         var kind: Kind
         var startX: Double
         var startY: Double
@@ -94,11 +97,14 @@ public final class SlideEngine {
         if var current = gesture {
             if active.isEmpty {
                 current.lostFrames += 1
-                // A tap ends the moment the finger lifts; a slide survives a
-                // few dropped frames so it does not stop halfway (1.8 fix).
-                if !current.moved || current.lostFrames > 5 || frame.timestamp - current.lastSeen > 0.12 {
+                let lifted = frame.contacts.contains { $0.id == current.contactID && !$0.isTouching }
+                // Give missing samples a short grace period, but end on an explicit lift.
+                if lifted || !current.moved || current.lostFrames > 5
+                    || frame.timestamp - current.lastSeen > Self.contactDropGrace {
                     finish(current, at: frame.timestamp, config: config)
                     gesture = nil
+                } else {
+                    gesture = current
                 }
                 return
             }
@@ -110,17 +116,24 @@ public final class SlideEngine {
                 return
             }
 
+            if point.id != current.contactID
+                || (current.lostFrames > 0 && frame.timestamp - current.lastSeen > Self.contactDropGrace) {
+                finish(current, at: frame.timestamp, config: config)
+                begin(contact: point, now: frame.timestamp, config: config)
+                return
+            }
+
             current.lostFrames = 0
             current.lastX = point.x
             current.lastY = point.y
             current.lastSeen = frame.timestamp
-            update(&current, point: CGPoint(x: point.x, y: point.y), now: frame.timestamp, config: config)
+            update(&current, point: CGPoint(x: point.x, y: point.y), config: config)
             gesture = current
             return
         }
 
         guard active.count == 1, let point = active.first else { return }
-        begin(point: CGPoint(x: point.x, y: point.y), now: frame.timestamp, config: config)
+        begin(contact: point, now: frame.timestamp, config: config)
     }
 
     /// Drops any in-flight gesture (e.g. the app was disabled).
@@ -131,9 +144,10 @@ public final class SlideEngine {
 
     // MARK: - Gesture lifecycle
 
-    private func begin(point: CGPoint, now: TimeInterval, config: EngineConfiguration) {
+    private func begin(contact: TouchContact, now: TimeInterval, config: EngineConfiguration) {
+        let point = CGPoint(x: contact.x, y: contact.y)
         guard ModifierState.modifierRequirementSatisfied(config.requireModifier, by: modifiers()) else {
-            gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: false, config: config)
+            gesture = makeGesture(kind: .ignored, contact: contact, now: now, level: 0, fine: false, config: config)
             return
         }
 
@@ -141,28 +155,28 @@ public final class SlideEngine {
         let fine = isFine(config: config)
 
         if config.quickMuteEnabled, geometry.isQuickMuteCorner(point) {
-            gesture = makeGesture(kind: .corner, point: point, now: now, level: 0, fine: fine, config: config)
+            gesture = makeGesture(kind: .corner, contact: contact, now: now, level: 0, fine: fine, config: config)
             return
         }
 
         guard let edge = geometry.edge(at: point) else {
-            gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: fine, config: config)
+            gesture = makeGesture(kind: .ignored, contact: contact, now: now, level: 0, fine: fine, config: config)
             return
         }
 
         switch edge {
         case .bottom:
             guard config.mediaStripEnabled else {
-                gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: fine, config: config)
+                gesture = makeGesture(kind: .ignored, contact: contact, now: now, level: 0, fine: fine, config: config)
                 return
             }
-            gesture = makeGesture(kind: .media, point: point, now: now, level: 0, fine: fine, config: config)
+            gesture = makeGesture(kind: .media, contact: contact, now: now, level: 0, fine: fine, config: config)
         case .left, .right:
             let target = edge == .left ? config.leftEdge : config.rightEdge
             let level = target == .volume ? config.currentVolume : config.currentBrightness
             gesture = makeGesture(
                 kind: .slider(target: target, edge: edge, startLevel: level),
-                point: point,
+                contact: contact,
                 now: now,
                 level: level,
                 fine: fine,
@@ -171,7 +185,7 @@ public final class SlideEngine {
         }
     }
 
-    private func update(_ gesture: inout Gesture, point: CGPoint, now: TimeInterval, config: EngineConfiguration) {
+    private func update(_ gesture: inout Gesture, point: CGPoint, config: EngineConfiguration) {
         let dx = point.x - gesture.startX
         let dy = point.y - gesture.startY
 
@@ -184,19 +198,27 @@ public final class SlideEngine {
             gesture.kind = .slider(target: target, edge: .right, startLevel: level)
             gesture.emittedLevel = (level * steps).rounded() / steps
             gesture.lastStep = Int((level * steps).rounded())
-            update(&gesture, point: point, now: now, config: config)
+            update(&gesture, point: point, config: config)
             return
         }
 
         switch gesture.kind {
         case let .slider(target, edge, startLevel):
+            let geometry = EdgeGeometry(edgeWidth: config.edgeWidth, bottomQuarterOnly: config.bottomQuarterOnly)
+            let insideBand = edge == .left ? point.x <= geometry.edgeWidth : point.x >= 1 - geometry.edgeWidth
+            guard insideBand else {
+                cancel(gesture)
+                // Keep this contact ignored until it lifts, even if it crosses an edge again.
+                gesture.kind = .ignored
+                return
+            }
+
             guard abs(dy) > 0.006 else { return }
             if !gesture.moved {
                 gesture.moved = true
                 delegate?.slideEngine(self, didBeginSlide: target)
             }
 
-            let geometry = EdgeGeometry(edgeWidth: config.edgeWidth, bottomQuarterOnly: config.bottomQuarterOnly)
             let span = geometry.travelSpan(for: edge)
             let raw = startLevel + (dy / span) * config.sensitivity
             let clamped = min(max(raw, 0), 1)
@@ -276,7 +298,7 @@ public final class SlideEngine {
 
     private func makeGesture(
         kind: Kind,
-        point: CGPoint,
+        contact: TouchContact,
         now: TimeInterval,
         level: Double,
         fine: Bool,
@@ -284,12 +306,13 @@ public final class SlideEngine {
     ) -> Gesture {
         let steps = fine ? 64.0 : 16.0
         return Gesture(
+            contactID: contact.id,
             kind: kind,
-            startX: point.x,
-            startY: point.y,
+            startX: contact.x,
+            startY: contact.y,
             startTime: now,
-            lastX: point.x,
-            lastY: point.y,
+            lastX: contact.x,
+            lastY: contact.y,
             lastSeen: now,
             moved: false,
             emittedLevel: (level * steps).rounded() / steps,

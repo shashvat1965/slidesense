@@ -146,16 +146,16 @@ final class MultitouchLibrary {
 /// forwards frames to whichever monitor is currently active.
 enum TouchRouter {
     static let lock = NSLock()
-    static var handler: ((UnsafeMutablePointer<MTTouch>, Int, Double) -> Void)?
+    static var handler: ((UnsafeBufferPointer<MTTouch>, Double) -> Void)?
 
     static let callback: MTFrameCallback = { _, touches, count, timestamp, _ in
         lock.lock()
         let handler = TouchRouter.handler
         lock.unlock()
 
-        guard let handler, let touches, count > 0 else { return 0 }
-        let records = touches.assumingMemoryBound(to: MTTouch.self)
-        handler(records, Int(count), timestamp)
+        guard let handler, count >= 0, count == 0 || touches != nil else { return 0 }
+        let records = UnsafeBufferPointer(start: touches?.assumingMemoryBound(to: MTTouch.self), count: Int(count))
+        handler(records, timestamp)
         return 0
     }
 }
@@ -192,8 +192,8 @@ public final class TrackpadMonitor {
     public func start() -> Bool {
         guard let library = MultitouchLibrary.shared else { return false }
         stop()
-        TouchRouter.handler = { [weak self] records, count, timestamp in
-            self?.handle(records: records, count: count, timestamp: timestamp)
+        TouchRouter.handler = { [weak self] records, timestamp in
+            self?.handle(records: records, timestamp: timestamp)
         }
 
         let found = enumerateDevices(library: library)
@@ -264,12 +264,11 @@ public final class TrackpadMonitor {
         return result
     }
 
-    private func handle(records: UnsafeMutablePointer<MTTouch>, count: Int, timestamp: Double) {
+    private func handle(records: UnsafeBufferPointer<MTTouch>, timestamp: Double) {
         var contacts: [TouchContact] = []
-        contacts.reserveCapacity(count)
+        contacts.reserveCapacity(records.count)
 
-        for index in 0..<count {
-            let record = records[index]
+        for record in records {
             var y = Double(record.normalized.position.y)
             if flipVertical { y = 1 - y }
             contacts.append(
@@ -282,7 +281,6 @@ public final class TrackpadMonitor {
             )
         }
 
-        guard !contacts.isEmpty else { return }
         onFrame?(TouchFrame(timestamp: timestamp, contacts: contacts))
     }
 }
