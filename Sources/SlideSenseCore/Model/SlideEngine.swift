@@ -43,6 +43,8 @@ public protocol SlideEngineDelegate: AnyObject {
 /// The engine is deliberately free of AppKit: it is fed `TouchFrame`s and
 /// emits semantic events, which makes the messy part unit-testable.
 public final class SlideEngine {
+    private static let tapTravelLimit = 0.03
+
     public weak var delegate: SlideEngineDelegate?
 
     /// Live configuration (levels are read when a slide begins).
@@ -53,12 +55,12 @@ public final class SlideEngine {
     private enum Kind {
         case slider(target: EdgeAction, edge: Edge, startLevel: Double)
         case media
-        case corner
         case ignored
     }
 
     private struct Gesture {
-        var kind: Kind
+        let kind: Kind
+        var canMuteOnTap: Bool
         var startX: Double
         var startY: Double
         var startTime: TimeInterval
@@ -73,7 +75,7 @@ public final class SlideEngine {
     }
 
     private var gesture: Gesture?
-    private var lastCornerTap: TimeInterval = -10
+    private var lastMuteTap: TimeInterval?
     private var lastMediaTap: TimeInterval = -10
 
     public init() {}
@@ -119,6 +121,7 @@ public final class SlideEngine {
             return
         }
 
+        if active.count > 1 { lastMuteTap = nil }
         guard active.count == 1, let point = active.first else { return }
         begin(point: CGPoint(x: point.x, y: point.y), now: frame.timestamp, config: config)
     }
@@ -127,36 +130,36 @@ public final class SlideEngine {
     public func reset() {
         if let current = gesture { cancel(current) }
         gesture = nil
+        lastMuteTap = nil
     }
 
     // MARK: - Gesture lifecycle
 
     private func begin(point: CGPoint, now: TimeInterval, config: EngineConfiguration) {
         guard ModifierState.modifierRequirementSatisfied(config.requireModifier, by: modifiers()) else {
-            gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: false, config: config)
+            lastMuteTap = nil
+            gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: false)
             return
         }
 
         let geometry = EdgeGeometry(edgeWidth: config.edgeWidth, bottomQuarterOnly: config.bottomQuarterOnly)
         let fine = isFine(config: config)
 
-        if config.quickMuteEnabled, geometry.isQuickMuteCorner(point) {
-            gesture = makeGesture(kind: .corner, point: point, now: now, level: 0, fine: fine, config: config)
-            return
-        }
+        let canMuteOnTap = config.quickMuteEnabled && geometry.isQuickMuteBand(point)
+        if !canMuteOnTap { lastMuteTap = nil }
 
         guard let edge = geometry.edge(at: point) else {
-            gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: fine, config: config)
+            gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: fine, canMuteOnTap: canMuteOnTap)
             return
         }
 
         switch edge {
         case .bottom:
             guard config.mediaStripEnabled else {
-                gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: fine, config: config)
+                gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: fine)
                 return
             }
-            gesture = makeGesture(kind: .media, point: point, now: now, level: 0, fine: fine, config: config)
+            gesture = makeGesture(kind: .media, point: point, now: now, level: 0, fine: fine)
         case .left, .right:
             let target = edge == .left ? config.leftEdge : config.rightEdge
             let level = target == .volume ? config.currentVolume : config.currentBrightness
@@ -166,7 +169,7 @@ public final class SlideEngine {
                 now: now,
                 level: level,
                 fine: fine,
-                config: config
+                canMuteOnTap: canMuteOnTap
             )
         }
     }
@@ -175,17 +178,8 @@ public final class SlideEngine {
         let dx = point.x - gesture.startX
         let dy = point.y - gesture.startY
 
-        // Touching down inside the Quick Mute corner and then sliding is a
-        // volume/brightness slide, not a failed tap.
-        if case .corner = gesture.kind, abs(dy) > 0.012 {
-            let target = config.rightEdge
-            let level = target == .volume ? config.currentVolume : config.currentBrightness
-            let steps = isFine(config: config) ? 64.0 : 16.0
-            gesture.kind = .slider(target: target, edge: .right, startLevel: level)
-            gesture.emittedLevel = (level * steps).rounded() / steps
-            gesture.lastStep = Int((level * steps).rounded())
-            update(&gesture, point: point, now: now, config: config)
-            return
+        if gesture.canMuteOnTap, hypot(dx, dy) >= Self.tapTravelLimit {
+            gesture.canMuteOnTap = false
         }
 
         switch gesture.kind {
@@ -225,7 +219,7 @@ public final class SlideEngine {
             if config.mediaStripReverse { forward.toggle() }
             delegate?.slideEngine(self, didRecognize: forward ? .next : .previous)
 
-        case .corner, .ignored:
+        case .ignored:
             break
         }
     }
@@ -233,7 +227,18 @@ public final class SlideEngine {
     private func finish(_ gesture: Gesture, at now: TimeInterval, config: EngineConfiguration) {
         let duration = now - gesture.startTime
         let travel = hypot(gesture.lastX - gesture.startX, gesture.lastY - gesture.startY)
-        let isTap = !gesture.moved && duration < 0.4 && travel < 0.03
+        let isTap = !gesture.moved && duration < 0.4 && travel < Self.tapTravelLimit
+
+        if isTap, gesture.canMuteOnTap, config.quickMuteEnabled {
+            if let lastMuteTap, now - lastMuteTap < 0.45 {
+                self.lastMuteTap = nil
+                delegate?.slideEngine(self, didRecognize: .mute)
+            } else {
+                lastMuteTap = now
+            }
+        } else {
+            lastMuteTap = nil
+        }
 
         switch gesture.kind {
         case let .slider(target, _, _):
@@ -251,22 +256,13 @@ public final class SlideEngine {
                 }
             }
 
-        case .corner:
-            if isTap {
-                if now - lastCornerTap < 0.45 {
-                    lastCornerTap = -10
-                    delegate?.slideEngine(self, didRecognize: .mute)
-                } else {
-                    lastCornerTap = now
-                }
-            }
-
         case .ignored:
             break
         }
     }
 
     private func cancel(_ gesture: Gesture) {
+        lastMuteTap = nil
         if case let .slider(target, _, _) = gesture.kind, gesture.moved {
             delegate?.slideEngine(self, didEndSlide: target, level: gesture.emittedLevel)
         }
@@ -280,11 +276,12 @@ public final class SlideEngine {
         now: TimeInterval,
         level: Double,
         fine: Bool,
-        config: EngineConfiguration
+        canMuteOnTap: Bool = false
     ) -> Gesture {
         let steps = fine ? 64.0 : 16.0
         return Gesture(
             kind: kind,
+            canMuteOnTap: canMuteOnTap,
             startX: point.x,
             startY: point.y,
             startTime: now,

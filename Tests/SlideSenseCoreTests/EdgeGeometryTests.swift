@@ -25,11 +25,14 @@ final class EdgeGeometryTests: XCTestCase {
         XCTAssertNil(geometry.edge(at: CGPoint(x: 0.05, y: 0.7)))
     }
 
-    func testQuickMuteCorner() {
+    func testQuickMuteBandCoversTopSixteenPercentAcrossFullWidth() {
         let geometry = EdgeGeometry()
-        XCTAssertTrue(geometry.isQuickMuteCorner(CGPoint(x: 0.95, y: 0.95)))
-        XCTAssertFalse(geometry.isQuickMuteCorner(CGPoint(x: 0.95, y: 0.5)))
-        XCTAssertFalse(geometry.isQuickMuteCorner(CGPoint(x: 0.5, y: 0.95)))
+        for x in [0.0, 0.5, 1.0] {
+            XCTAssertTrue(geometry.isQuickMuteBand(CGPoint(x: x, y: 0.84)))
+            XCTAssertFalse(geometry.isQuickMuteBand(CGPoint(x: x, y: 0.839)))
+        }
+        XCTAssertFalse(geometry.isQuickMuteBand(CGPoint(x: -0.01, y: 0.95)))
+        XCTAssertFalse(geometry.isQuickMuteBand(CGPoint(x: 0.5, y: 1.01)))
     }
 
     func testOutOfRangePointsAreIgnored() {
