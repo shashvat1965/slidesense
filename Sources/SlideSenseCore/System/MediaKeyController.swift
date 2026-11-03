@@ -2,7 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-/// Posts the same system-defined key events the media keys on a keyboard send.
+/// Controls system playback, with keyboard events for commands without a transport route.
 public final class MediaKeyController {
     public static let shared = MediaKeyController()
 
@@ -29,11 +29,23 @@ public final class MediaKeyController {
         case previous = 18
     }
 
-    private init() {}
+    private let postEvent: (CGEvent) -> Void
+    private let sendPlayPause: () -> Bool
+
+    init(
+        sendPlayPause: (() -> Bool)? = nil,
+        postEvent: @escaping (CGEvent) -> Void = { $0.post(tap: .cghidEventTap) }
+    ) {
+        self.sendPlayPause = sendPlayPause ?? { MediaRemotePlayback.togglePlayPause() }
+        self.postEvent = postEvent
+    }
 
     public func send(_ command: Command) {
         switch command {
-        case .playPause: press(.play)
+        case .playPause:
+            // Modern players receive transport commands through the system media session.
+            // Do not also post a key after acceptance: that could toggle playback twice.
+            if !sendPlayPause() { press(.play) }
         case .next: press(.next)
         case .previous: press(.previous)
         case .volumeUp: press(.soundUp)
@@ -50,8 +62,8 @@ public final class MediaKeyController {
     }
 
     private func post(key: Key, down: Bool) {
-        let flags = NSEvent.ModifierFlags(rawValue: 0xa00) // fn + numeric pad
         let state: Int = down ? 0xA : 0xB
+        let flags = NSEvent.ModifierFlags(rawValue: UInt(state << 8))
         let data1 = Int(key.rawValue << 16) | (state << 8)
         guard
             let event = NSEvent.otherEvent(
@@ -67,6 +79,22 @@ public final class MediaKeyController {
             ),
             let cgEvent = event.cgEvent
         else { return }
-        cgEvent.post(tap: .cghidEventTap)
+        postEvent(cgEvent)
+    }
+}
+
+private enum MediaRemotePlayback {
+    private typealias SendCommand = @convention(c) (Int32, CFDictionary?) -> Bool
+    private static let handle = dlopen(
+        "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW
+    )
+    private static let sendCommand: SendCommand? = {
+        guard let handle, let symbol = dlsym(handle, "MRMediaRemoteSendCommand") else { return nil }
+        return unsafeBitCast(symbol, to: SendCommand.self)
+    }()
+
+    static func togglePlayPause() -> Bool {
+        // 2 is the MediaRemote toggle-play/pause command; no metadata access is needed.
+        sendCommand?(2, nil) ?? false
     }
 }

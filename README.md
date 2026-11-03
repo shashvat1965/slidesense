@@ -94,7 +94,8 @@ expected.
 
 On first launch macOS shows an Accessibility prompt. Approve it in
 **System Settings → Privacy & Security → Accessibility**. Without it the edge
-sliders still work; the media strip and any key-event fallback do not.
+sliders and compatible system playback sessions still work. Next/previous track
+commands and keyboard-event fallbacks require Accessibility access.
 
 > Gatekeeper: if you download a prebuilt copy, right-click → Open the first time.
 > This project does not ship notarised binaries.
@@ -108,7 +109,13 @@ sliders still work; the media strip and any key-event fallback do not.
 | Hold ⇧⌥ while sliding | Quarter steps |
 | Double-tap the top-right corner | Mute / unmute |
 | Swipe left/right on the bottom band | Next / previous track |
-| Double-tap the bottom band | Play / pause (off by default) |
+| Double-tap the bottom band | Toggle the active system media session (off by default) |
+
+Play/Pause targets the active macOS media session, including compatible browser
+media and native players. If the system command is unavailable or rejected,
+SlideSense falls back to the Mac’s media key. Sites and apps must support one
+of these control routes. The combined Play/Pause icon acknowledges the gesture;
+it does not claim that the player changed state.
 
 A slide always starts from the current system level, so you can nudge from
 wherever you are. Because the level is absolute, dragging back down gives the
