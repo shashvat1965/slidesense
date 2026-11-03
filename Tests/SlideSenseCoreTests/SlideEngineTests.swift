@@ -43,8 +43,8 @@ final class SlideEngineTests: XCTestCase {
         return (engine, recorder)
     }
 
-    private func frame(at time: TimeInterval, x: Double, y: Double, touching: Bool = true) -> TouchFrame {
-        TouchFrame(timestamp: time, contacts: [TouchContact(id: 1, x: x, y: y, isTouching: touching)])
+    private func frame(at time: TimeInterval, x: Double, y: Double, touching: Bool = true, id: Int32 = 1) -> TouchFrame {
+        TouchFrame(timestamp: time, contacts: [TouchContact(id: id, x: x, y: y, isTouching: touching)])
     }
 
     func testRightSlideSenseChangesVolume() {
@@ -79,6 +79,109 @@ final class SlideEngineTests: XCTestCase {
         engine.process(frame(at: 0.02, x: 0.55, y: 0.55))
         XCTAssertTrue(recorder.begins.isEmpty)
         XCTAssertTrue(recorder.updates.isEmpty)
+    }
+
+    func testSlideEndsWhenFingerMovesIntoMiddle() {
+        for (edgeX, target) in [(0.05, EdgeAction.brightness), (0.95, .volume)] {
+            let (engine, recorder) = makeEngine()
+            engine.process(frame(at: 0, x: edgeX, y: 0.3))
+            engine.process(frame(at: 0.02, x: edgeX, y: 0.45))
+            XCTAssertTrue(engine.isTrackingSlide)
+            let lastLevel = recorder.updates.last?.1
+
+            engine.process(frame(at: 0.04, x: 0.5, y: 0.6))
+            XCTAssertFalse(engine.isTrackingSlide)
+            engine.process(frame(at: 0.06, x: 0.5, y: 0.7))
+            engine.process(TouchFrame(timestamp: 0.07, contacts: []))
+            engine.process(frame(at: 0.08, x: edgeX, y: 0.8))
+            engine.process(frame(at: 0.10, x: edgeX, y: 0.9))
+
+            XCTAssertEqual(recorder.begins, [target])
+            XCTAssertEqual(recorder.updates.count, 1)
+            XCTAssertEqual(recorder.ends.map(\.0), [target])
+            XCTAssertEqual(recorder.ends.last?.1, lastLevel)
+        }
+    }
+
+    func testVerticalMotionInMiddleNeverAdjustsLevels() {
+        for width in [0.1, 0.18] {
+            for x in stride(from: width + 0.01, through: 1 - width - 0.01, by: 0.05) {
+                let (engine, recorder) = makeEngine { $0.edgeWidth = width }
+                for (index, y) in [0.3, 0.5, 0.7, 0.5, 0.3].enumerated() {
+                    engine.process(frame(at: Double(index) * 0.02, x: x, y: y))
+                    XCTAssertFalse(engine.isTrackingSlide, "x=\(x), y=\(y), width=\(width)")
+                }
+                XCTAssertTrue(recorder.begins.isEmpty)
+                XCTAssertTrue(recorder.updates.isEmpty)
+                XCTAssertTrue(recorder.ticks.isEmpty)
+            }
+        }
+    }
+
+    func testSlideEndsAboveBottomQuarter() {
+        for (x, target) in [(0.05, EdgeAction.brightness), (0.95, .volume)] {
+            let (engine, recorder) = makeEngine { $0.bottomQuarterOnly = true }
+            engine.process(frame(at: 0, x: x, y: 0.1))
+            engine.process(frame(at: 0.02, x: x, y: 0.2))
+            XCTAssertTrue(engine.isTrackingSlide)
+            let updateCount = recorder.updates.count
+
+            engine.process(frame(at: 0.04, x: x, y: 0.26))
+            XCTAssertFalse(engine.isTrackingSlide)
+            engine.process(frame(at: 0.06, x: x, y: 0.5))
+            engine.process(frame(at: 0.08, x: x, y: 0.2))
+
+            XCTAssertEqual(recorder.updates.count, updateCount)
+            XCTAssertEqual(recorder.begins, [target])
+            XCTAssertEqual(recorder.ends.map(\.0), [target])
+        }
+    }
+
+    func testSideSlideEndsWhenBottomStripBecomesNearestEdge() {
+        for (x, target) in [(0.15, EdgeAction.brightness), (0.85, .volume)] {
+            let (engine, recorder) = makeEngine()
+            engine.process(frame(at: 0, x: x, y: 0.5))
+            engine.process(frame(at: 0.02, x: x, y: 0.4))
+            XCTAssertTrue(engine.isTrackingSlide)
+            let updateCount = recorder.updates.count
+
+            engine.process(frame(at: 0.04, x: x, y: 0.02))
+            XCTAssertFalse(engine.isTrackingSlide)
+            engine.process(frame(at: 0.06, x: x, y: 0.01))
+            engine.process(frame(at: 0.08, x: x, y: 0.4))
+
+            XCTAssertEqual(recorder.updates.count, updateCount)
+            XCTAssertEqual(recorder.begins, [target])
+            XCTAssertEqual(recorder.ends.map(\.0), [target])
+            XCTAssertTrue(recorder.commands.isEmpty)
+        }
+    }
+
+    func testQuickMuteCornerCannotStartSlideOutsideBottomQuarter() {
+        let (engine, recorder) = makeEngine { $0.bottomQuarterOnly = true }
+        engine.process(frame(at: 0, x: 0.95, y: 0.95))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.8))
+        engine.process(frame(at: 0.04, x: 0.95, y: 0.7))
+
+        XCTAssertFalse(engine.isTrackingSlide)
+        XCTAssertTrue(recorder.begins.isEmpty)
+        XCTAssertTrue(recorder.updates.isEmpty)
+    }
+
+    func testNewContactDoesNotInheritSlide() {
+        let (engine, recorder) = makeEngine()
+        engine.process(frame(at: 0, x: 0.95, y: 0.3))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.45))
+        engine.process(TouchFrame(timestamp: 0.03, contacts: []))
+        XCTAssertTrue(engine.isTrackingSlide)
+
+        engine.process(frame(at: 0.04, x: 0.5, y: 0.6, id: 2))
+        engine.process(frame(at: 0.06, x: 0.95, y: 0.8, id: 2))
+
+        XCTAssertFalse(engine.isTrackingSlide)
+        XCTAssertEqual(recorder.begins, [.volume])
+        XCTAssertEqual(recorder.updates.count, 1)
+        XCTAssertEqual(recorder.ends.count, 1)
     }
 
     func testSecondFingerCancelsSlide() {
@@ -146,6 +249,49 @@ final class SlideEngineTests: XCTestCase {
         XCTAssertEqual(recorder.begins.count, 1)
         XCTAssertEqual(recorder.ends.count, 0)
         XCTAssertGreaterThan(recorder.updates.last?.1 ?? 0, 0.5)
+    }
+
+    func testReportedLiftEndsSlideImmediately() {
+        let (engine, recorder) = makeEngine()
+        engine.process(frame(at: 0, x: 0.95, y: 0.3))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.45))
+        engine.process(frame(at: 0.04, x: 0.95, y: 0.45, touching: false))
+
+        XCTAssertFalse(engine.isTrackingSlide)
+        XCTAssertEqual(recorder.ends.map(\.0), [.volume])
+
+        engine.process(frame(at: 0.06, x: 0.05, y: 0.6))
+        engine.process(frame(at: 0.08, x: 0.05, y: 0.75))
+        XCTAssertEqual(recorder.begins, [.volume, .brightness])
+    }
+
+    func testRepeatedMissingFramesEndSlide() {
+        let (engine, recorder) = makeEngine()
+        engine.process(frame(at: 0, x: 0.95, y: 0.3))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.45))
+
+        for index in 1...5 {
+            engine.process(TouchFrame(timestamp: 0.02 + Double(index) * 0.01, contacts: []))
+            XCTAssertTrue(engine.isTrackingSlide)
+        }
+        engine.process(TouchFrame(timestamp: 0.08, contacts: []))
+
+        XCTAssertFalse(engine.isTrackingSlide)
+        XCTAssertEqual(recorder.ends.map(\.0), [.volume])
+    }
+
+    func testContactReturningAfterGraceStartsFreshSlide() {
+        let (engine, recorder) = makeEngine()
+        engine.process(frame(at: 0, x: 0.95, y: 0.3))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.45))
+        engine.process(TouchFrame(timestamp: 0.03, contacts: []))
+        engine.process(frame(at: 0.2, x: 0.05, y: 0.6))
+
+        XCTAssertFalse(engine.isTrackingSlide)
+        XCTAssertEqual(recorder.ends.map(\.0), [.volume])
+
+        engine.process(frame(at: 0.22, x: 0.05, y: 0.75))
+        XCTAssertEqual(recorder.begins, [.volume, .brightness])
     }
 
     func testFineControlUsesQuarterSteps() {
