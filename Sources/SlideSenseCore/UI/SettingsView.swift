@@ -211,12 +211,12 @@ struct SettingsTabContent: View {
     private var extrasForm: some View {
         Form {
             Section {
-                Toggle("Double-Tap Top Right", isOn: $store.settings.quickMuteEnabled)
+                Toggle("Double-Tap Top Edge", isOn: $store.settings.quickMuteEnabled)
                     .toggleStyle(.switch)
             } header: {
                 Text("Quick Mute")
             } footer: {
-                Text("Mutes or unmutes when you double-tap the top-right corner of the trackpad.")
+                Text("Double-tap anywhere along the top edge of the trackpad to mute or unmute audio.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

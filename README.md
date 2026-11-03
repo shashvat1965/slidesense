@@ -29,7 +29,7 @@ matching on-screen display, quick mute, and a media strip along the bottom edge.
 | **Bottom quarter only** | Restrict the side bands to the lower quarter of the pad. |
 | **Require a modifier** | Demand FN, Option or Control before an edge responds. |
 | **Cursor freeze** | The pointer stays put and hidden while you slide. |
-| **Quick Mute** | Double-tap the top-right corner. |
+| **Quick Mute** | Double-tap anywhere along the top edge. |
 | **Media strip** | Swipe along the bottom edge to skip; double-tap to play/pause. |
 | **Swap sides** | Brightness on the right if you prefer. |
 | **Menu bar only** | No Dock icon. Idle CPU is effectively zero. |
@@ -106,9 +106,9 @@ sliders still work; the media strip and any key-event fallback do not.
 | Slide up/down on the left band | Brightness |
 | Slide up/down on the right band | Volume |
 | Hold ⇧⌥ while sliding | Quarter steps |
-| Double-tap the top-right corner | Mute / unmute |
+| Double-tap the top edge | Mute / unmute |
 | Swipe left/right on the bottom band | Next / previous track |
-| Double-tap the bottom band | Play / pause (off by default) |
+| Double-tap the bottom band | Send the Mac’s Play/Pause key (off by default) |
 
 A slide always starts from the current system level, so you can nudge from
 wherever you are. Because the level is absolute, dragging back down gives the

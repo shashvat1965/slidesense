@@ -14,6 +14,7 @@ public final class AudioController: LevelController {
     private var cachedDevice = AudioDeviceID(0)
     private var cachedLevel: Double = 0.5
     private var cachedMuted = false
+    private var volumeBeforeMute: [AudioDeviceID: Float] = [:]
 
     /// Called on the main queue whenever the system volume, mute state or
     /// default output device changes. There is no timer behind this: CoreAudio
@@ -47,10 +48,9 @@ public final class AudioController: LevelController {
         guard device != 0 else { return }
         if let value = readVolume(device: device) {
             cachedLevel = Double(value)
+            if value > 0 { volumeBeforeMute.removeValue(forKey: device) }
         }
-        if let muted = readMute(device: device) {
-            cachedMuted = muted
-        }
+        cachedMuted = volumeBeforeMute[device] != nil || (!isAirPlay(device: device) && readMute(device: device) == true)
     }
 
     // MARK: - Observation
@@ -68,6 +68,10 @@ public final class AudioController: LevelController {
         remove(deviceListeners)
         systemListeners.removeAll()
         deviceListeners.removeAll()
+        for (device, volume) in volumeBeforeMute where readVolume(device: device) == 0 {
+            writeVolume(device: device, value: volume)
+        }
+        volumeBeforeMute.removeAll()
     }
 
     private func addSystemListener(selector: AudioObjectPropertySelector) {
@@ -83,6 +87,7 @@ public final class AudioController: LevelController {
     private func registerDeviceListeners() {
         let device = currentDevice()
         guard device != 0 else { return }
+        addListener(on: device, selector: Self.virtualMainVolume, scope: kAudioObjectPropertyScopeOutput, element: kAudioObjectPropertyElementMain, into: &deviceListeners)
         addListener(on: device, selector: kAudioDevicePropertyVolumeScalar, scope: kAudioObjectPropertyScopeOutput, element: kAudioObjectPropertyElementMain, into: &deviceListeners)
         addListener(on: device, selector: kAudioDevicePropertyMute, scope: kAudioObjectPropertyScopeOutput, element: kAudioObjectPropertyElementMain, into: &deviceListeners)
         for element in [AudioObjectPropertyElement(1), AudioObjectPropertyElement(2)] {
@@ -116,10 +121,9 @@ public final class AudioController: LevelController {
     }
 
     private func configurationChanged() {
-        let previousDevice = cachedDevice
         refresh()
 
-        if cachedDevice != previousDevice {
+        if deviceListeners.first?.object != cachedDevice {
             // The default output changed: the per-device listeners are stale.
             remove(deviceListeners)
             deviceListeners.removeAll()
@@ -136,18 +140,32 @@ public final class AudioController: LevelController {
         // Writing a non-zero level always unmutes, like the system volume keys.
         if clamped > 0, cachedMuted {
             writeMute(device: device, muted: false)
-            cachedMuted = false
         }
-        writeVolume(device: device, value: clamped)
-        cachedLevel = Double(clamped)
+        if writeVolume(device: device, value: clamped) {
+            if clamped > 0 { volumeBeforeMute.removeValue(forKey: device) }
+            cachedLevel = Double(clamped)
+        }
+        cachedMuted = volumeBeforeMute[device] != nil || (!isAirPlay(device: device) && readMute(device: device) == true)
     }
 
     public func toggleMute() {
-        let device = currentDevice()
+        refresh()
+        let device = cachedDevice
         guard device != 0 else { return }
-        let newValue = !cachedMuted
-        writeMute(device: device, muted: newValue)
-        cachedMuted = newValue
+
+        if let previousVolume = volumeBeforeMute[device] {
+            guard writeVolume(device: device, value: previousVolume) else { return }
+            volumeBeforeMute.removeValue(forKey: device)
+            cachedLevel = Double(previousVolume)
+            cachedMuted = false
+        } else if !isAirPlay(device: device), writeMute(device: device, muted: !cachedMuted) {
+            cachedMuted.toggle()
+        } else if let volume = readVolume(device: device), volume > 0, writeVolume(device: device, value: 0) {
+            // AirPlay can acknowledge a mute write while the receiver still plays audio.
+            volumeBeforeMute[device] = volume
+            cachedLevel = 0
+            cachedMuted = true
+        }
     }
 
     // MARK: - Device
@@ -187,6 +205,18 @@ public final class AudioController: LevelController {
         return status == noErr ? device : 0
     }
 
+    private func isAirPlay(device: AudioDeviceID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var transport = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &transport)
+        return status == noErr && transport == kAudioDeviceTransportTypeAirPlay
+    }
+
     // MARK: - Volume
 
     private func volumeAddresses(device: AudioDeviceID) -> [AudioObjectPropertyAddress] {
@@ -214,10 +244,12 @@ public final class AudioController: LevelController {
         return nil
     }
 
-    private func writeVolume(device: AudioDeviceID, value: Float) {
+    @discardableResult
+    private func writeVolume(device: AudioDeviceID, value: Float) -> Bool {
+        var wrote = false
         for var address in volumeAddresses(device: device) {
             var payload = value
-            _ = AudioObjectSetPropertyData(
+            let status = AudioObjectSetPropertyData(
                 device,
                 &address,
                 0,
@@ -225,7 +257,9 @@ public final class AudioController: LevelController {
                 UInt32(MemoryLayout<Float32>.size),
                 &payload
             )
+            if status == noErr { wrote = true }
         }
+        return wrote
     }
 
     // MARK: - Mute
@@ -253,10 +287,12 @@ public final class AudioController: LevelController {
         return nil
     }
 
-    private func writeMute(device: AudioDeviceID, muted: Bool) {
+    @discardableResult
+    private func writeMute(device: AudioDeviceID, muted: Bool) -> Bool {
+        var wrote = false
         for var address in muteAddresses(device: device) {
             var value = UInt32(muted ? 1 : 0)
-            _ = AudioObjectSetPropertyData(
+            let status = AudioObjectSetPropertyData(
                 device,
                 &address,
                 0,
@@ -264,7 +300,9 @@ public final class AudioController: LevelController {
                 UInt32(MemoryLayout<UInt32>.size),
                 &value
             )
+            if status == noErr { wrote = true }
         }
+        return wrote
     }
 
     private func isSettable(_ device: AudioDeviceID, _ address: inout AudioObjectPropertyAddress) -> Bool {

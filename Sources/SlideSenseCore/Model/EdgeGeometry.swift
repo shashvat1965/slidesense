@@ -22,13 +22,9 @@ public struct EdgeGeometry: Sendable {
     public var edgeWidth: Double
     /// Restrict the left/right edges to the lower quarter of the trackpad.
     public var bottomQuarterOnly: Bool
-    /// Size of the top-right corner used for Quick Mute.
-    public var cornerSize: Double
-
-    public init(edgeWidth: Double = 0.18, bottomQuarterOnly: Bool = false, cornerSize: Double = 0.16) {
+    public init(edgeWidth: Double = 0.18, bottomQuarterOnly: Bool = false) {
         self.edgeWidth = min(max(edgeWidth, 0.05), 0.45)
         self.bottomQuarterOnly = bottomQuarterOnly
-        self.cornerSize = cornerSize
     }
 
     public init(settings: Settings) {
@@ -57,11 +53,11 @@ public struct EdgeGeometry: Sendable {
         return best.edge
     }
 
-    /// The top-right corner region used for Quick Mute.
-    public func isQuickMuteCorner(_ point: CGPoint) -> Bool {
+    /// Quick Mute uses the top 16% of the trackpad across its full width.
+    public func isQuickMuteBand(_ point: CGPoint) -> Bool {
         let x = Double(point.x)
         let y = Double(point.y)
-        return x >= 1 - cornerSize && y >= 1 - cornerSize
+        return (0...1).contains(x) && (0.84...1).contains(y)
     }
 
     /// The span of trackpad travel that maps onto a full 0…1 change.
