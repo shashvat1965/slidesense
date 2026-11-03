@@ -205,8 +205,7 @@ public final class SlideEngine {
         switch gesture.kind {
         case let .slider(target, edge, startLevel):
             let geometry = EdgeGeometry(edgeWidth: config.edgeWidth, bottomQuarterOnly: config.bottomQuarterOnly)
-            let insideBand = edge == .left ? point.x <= geometry.edgeWidth : point.x >= 1 - geometry.edgeWidth
-            guard insideBand else {
+            guard geometry.edge(at: point) == edge else {
                 cancel(gesture)
                 // Keep this contact ignored until it lifts, even if it crosses an edge again.
                 gesture.kind = .ignored
