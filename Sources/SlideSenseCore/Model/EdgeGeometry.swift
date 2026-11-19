@@ -64,6 +64,18 @@ public struct EdgeGeometry: Sendable {
         return x >= 1 - cornerSize && y >= 1 - cornerSize
     }
 
+    /// Whether a point is still within the active band for a left/right edge
+    /// slide. A little grace past the band keeps a small sideways wobble from
+    /// freezing the slide; the bottom strip is not constrained this way.
+    public func isWithinSlideBand(edge: Edge, point: CGPoint, grace: Double = 0.06) -> Bool {
+        let x = Double(point.x)
+        switch edge {
+        case .left: return x <= edgeWidth + grace
+        case .right: return x >= 1 - edgeWidth - grace
+        case .bottom: return true
+        }
+    }
+
     /// The span of trackpad travel that maps onto a full 0…1 change.
     public func travelSpan(for edge: Edge) -> Double {
         switch edge {
