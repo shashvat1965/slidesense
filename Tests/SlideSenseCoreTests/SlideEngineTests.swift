@@ -177,4 +177,43 @@ final class SlideEngineTests: XCTestCase {
         engine.process(frame(at: 0.02, x: 0.95, y: 0.6))
         XCTAssertTrue(recorder.updates.isEmpty)
     }
+
+    func testSliderIgnoresMovementOutsideBand() {
+        var config = EngineConfiguration()
+        config.currentVolume = 0.5
+        config.edgeWidth = 0.18
+        let (engine, recorder) = makeEngine { $0 = config }
+
+        // Begin on the right edge and nudge up while inside the 18% band.
+        engine.process(frame(at: 0.0, x: 0.95, y: 0.3))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.45))
+        let held = recorder.updates.last?.1 ?? 0
+        XCTAssertGreaterThan(held, 0.5)
+
+        // Wander to the centre and move vertically a lot: the level must hold,
+        // not swing, because the finger left the configured band.
+        engine.process(frame(at: 0.04, x: 0.50, y: 0.95))
+        engine.process(frame(at: 0.06, x: 0.50, y: 0.05))
+        XCTAssertEqual(
+            recorder.updates.last?.1 ?? 0, held, accuracy: 0.0001,
+            "level changed while the finger was outside the edge band"
+        )
+    }
+
+    func testSliderResumesAfterReturningToBand() {
+        var config = EngineConfiguration()
+        config.currentVolume = 0.5
+        config.edgeWidth = 0.18
+        let (engine, recorder) = makeEngine { $0 = config }
+
+        engine.process(frame(at: 0.0, x: 0.95, y: 0.3))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.45)) // in band, up
+        let held = recorder.updates.last?.1 ?? 0
+        engine.process(frame(at: 0.04, x: 0.50, y: 0.95)) // out of band, ignored
+        engine.process(frame(at: 0.06, x: 0.95, y: 0.99)) // back in band, slightly up
+
+        let resumed = recorder.updates.last?.1 ?? 0
+        XCTAssertGreaterThanOrEqual(resumed, held)      // continues from where it held
+        XCTAssertLessThan(resumed, 1.0)                 // did not lurch to the max
+    }
 }

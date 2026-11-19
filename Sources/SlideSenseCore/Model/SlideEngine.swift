@@ -190,13 +190,24 @@ public final class SlideEngine {
 
         switch gesture.kind {
         case let .slider(target, edge, startLevel):
+            let geometry = EdgeGeometry(edgeWidth: config.edgeWidth, bottomQuarterOnly: config.bottomQuarterOnly)
+
+            // Keep adjustment inside the configured edge band. If the finger
+            // wanders toward the centre, hold the level and re-anchor to the
+            // current point, so drifting off the band never changes the value
+            // and returning to it resumes smoothly instead of lurching.
+            guard geometry.isWithinSlideBand(edge: edge, point: point) else {
+                gesture.startY = point.y
+                gesture.kind = .slider(target: target, edge: edge, startLevel: gesture.emittedLevel)
+                return
+            }
+
             guard abs(dy) > 0.006 else { return }
             if !gesture.moved {
                 gesture.moved = true
                 delegate?.slideEngine(self, didBeginSlide: target)
             }
 
-            let geometry = EdgeGeometry(edgeWidth: config.edgeWidth, bottomQuarterOnly: config.bottomQuarterOnly)
             let span = geometry.travelSpan(for: edge)
             let raw = startLevel + (dy / span) * config.sensitivity
             let clamped = min(max(raw, 0), 1)
