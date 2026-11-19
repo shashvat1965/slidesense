@@ -103,7 +103,7 @@ public final class SlideEngine {
                 return
             }
 
-            guard active.count == 1, let point = active.first else {
+            guard active.count >= 2, let point = active.first else {
                 // Extra fingers mean the user wants a system gesture.
                 cancel(current)
                 gesture = nil
@@ -119,8 +119,17 @@ public final class SlideEngine {
             return
         }
 
-        guard active.count == 1, let point = active.first else { return }
+        guard active.count >= 2, let point = active.first else { return }
         begin(point: CGPoint(x: point.x, y: point.y), now: frame.timestamp, config: config)
+
+            // Require both fingers to be in edge regions, not center (avoid scrolling)
+            if active.count == 2 {
+                let otherFinger = active.last!
+                // Scroll gestures have both fingers close together; we need them far apart on edges
+                if abs(otherFinger.x - point.x) < 0.05 {
+                    return
+                }
+            }
     }
 
     /// Drops any in-flight gesture (e.g. the app was disabled).
