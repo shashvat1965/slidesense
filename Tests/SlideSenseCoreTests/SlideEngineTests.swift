@@ -177,4 +177,56 @@ final class SlideEngineTests: XCTestCase {
         engine.process(frame(at: 0.02, x: 0.95, y: 0.6))
         XCTAssertTrue(recorder.updates.isEmpty)
     }
+    func testModifierReleaseCancelsUntilLift() {
+        let (engine, recorder) = makeEngine { $0.requireModifier = .option }
+        var held: ModifierState = .option
+        engine.modifiers = { held }
+        engine.process(frame(at: 0, x: 0.95, y: 0.2))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.4))
+        let count = recorder.updates.count
+        held = []
+        engine.process(frame(at: 0.04, x: 0.95, y: 0.6))
+        held = .option
+        engine.process(frame(at: 0.06, x: 0.95, y: 0.8))
+        XCTAssertEqual(recorder.updates.count, count)
+        XCTAssertEqual(recorder.ends.count, 1)
+        XCTAssertFalse(engine.isTrackingSlide)
+    }
+
+    func testLeavingEdgeCancelsUntilLift() {
+        let (engine, recorder) = makeEngine()
+        engine.process(frame(at: 0, x: 0.95, y: 0.2))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.4))
+        let count = recorder.updates.count
+        engine.process(frame(at: 0.04, x: 0.5, y: 0.6))
+        engine.process(frame(at: 0.06, x: 0.95, y: 0.8))
+        XCTAssertEqual(recorder.updates.count, count)
+        XCTAssertEqual(recorder.ends.count, 1)
+        XCTAssertFalse(engine.isTrackingSlide)
+    }
+
+    func testLiftNewContactAndLongGapDoNotInheritSlide() {
+        for ending in ["lift", "newContact", "gap", "emptyFrames"] {
+            let (engine, recorder) = makeEngine()
+            engine.process(frame(at: 0, x: 0.95, y: 0.2))
+            engine.process(frame(at: 0.02, x: 0.95, y: 0.4))
+            let count = recorder.updates.count
+            switch ending {
+            case "lift":
+                engine.process(frame(at: 0.03, x: 0.95, y: 0.4, touching: false))
+            case "emptyFrames":
+                for index in 1...6 {
+                    engine.process(TouchFrame(timestamp: 0.02 + Double(index) * 0.01, contacts: []))
+                }
+            default: break
+            }
+            engine.process(TouchFrame(timestamp: ending == "gap" ? 1 : 0.09, contacts: [
+                TouchContact(id: ending == "newContact" ? 2 : 1, x: 0.5, y: 0.6, isTouching: true)
+            ]))
+            XCTAssertEqual(recorder.updates.count, count, ending)
+            XCTAssertEqual(recorder.ends.count, 1, ending)
+            XCTAssertFalse(engine.isTrackingSlide, ending)
+        }
+    }
+
 }
