@@ -73,6 +73,7 @@ public final class SlideEngine {
     }
 
     private var gesture: Gesture?
+    private var contactID: Int32?
     private var lastCornerTap: TimeInterval = -10
     private var lastMediaTap: TimeInterval = -10
 
@@ -96,9 +97,12 @@ public final class SlideEngine {
                 current.lostFrames += 1
                 // A tap ends the moment the finger lifts; a slide survives a
                 // few dropped frames so it does not stop halfway (1.8 fix).
-                if !current.moved || current.lostFrames > 5 || frame.timestamp - current.lastSeen > 0.12 {
+                if frame.contacts.contains(where: { $0.id == contactID && !$0.isTouching }) ||
+                    !current.moved || current.lostFrames > 5 || frame.timestamp - current.lastSeen > 0.12 {
                     finish(current, at: frame.timestamp, config: config)
                     gesture = nil
+                } else {
+                    gesture = current
                 }
                 return
             }
@@ -107,6 +111,15 @@ public final class SlideEngine {
                 // Extra fingers mean the user wants a system gesture.
                 cancel(current)
                 gesture = nil
+                return
+            }
+
+            // A new contact or a long silence must not inherit the old action.
+            if point.id != contactID || frame.timestamp - current.lastSeen > 0.12 {
+                cancel(current)
+                gesture = nil
+                contactID = point.id
+                begin(point: CGPoint(x: point.x, y: point.y), now: frame.timestamp, config: config)
                 return
             }
 
@@ -120,6 +133,7 @@ public final class SlideEngine {
         }
 
         guard active.count == 1, let point = active.first else { return }
+        contactID = point.id
         begin(point: CGPoint(x: point.x, y: point.y), now: frame.timestamp, config: config)
     }
 
@@ -172,6 +186,21 @@ public final class SlideEngine {
     }
 
     private func update(_ gesture: inout Gesture, point: CGPoint, now: TimeInterval, config: EngineConfiguration) {
+        let geometry = EdgeGeometry(edgeWidth: config.edgeWidth, bottomQuarterOnly: config.bottomQuarterOnly)
+        let inside: Bool
+        switch gesture.kind {
+        case let .slider(_, edge, _): inside = geometry.edge(at: point) == edge
+        case .media: inside = geometry.edge(at: point) == .bottom
+        case .corner: inside = geometry.isQuickMuteCorner(point) || geometry.edge(at: point) == .right
+        case .ignored: return
+        }
+        guard inside, ModifierState.modifierRequirementSatisfied(config.requireModifier, by: modifiers()) else {
+            cancel(gesture)
+            // Require a fresh touch after leaving the edge or releasing the key.
+            gesture.kind = .ignored
+            return
+        }
+
         let dx = point.x - gesture.startX
         let dy = point.y - gesture.startY
 
