@@ -317,6 +317,8 @@ struct SettingsTabContent: View {
             Section {
                 Toggle("Show HUD", isOn: $store.settings.showHUD)
                     .toggleStyle(.switch)
+                Toggle("Use macOS HUD", isOn: $store.settings.useSystemHUD)
+                    .toggleStyle(.switch)
                 LabeledContent("Appearance") {
                     Picker("Appearance", selection: $store.settings.appearance) {
                         ForEach(AppearanceMode.allCases) { mode in
@@ -330,7 +332,8 @@ struct SettingsTabContent: View {
             } header: {
                 Text("HUD")
             } footer: {
-                Text("The HUD appears while you slide an edge.")
+                Text("The HUD appears while you slide an edge. Use macOS HUD shows Apple's volume and "
+                     + "brightness HUD instead, in the same 16 steps as the keys; it needs Accessibility.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

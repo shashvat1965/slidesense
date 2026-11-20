@@ -147,8 +147,8 @@ Five tabs in a standard macOS preferences window:
 - **Media** — Quick Mute, media strip, reverse swipe, tap to play/pause. Turn
   all four off and the app does nothing but brightness and volume.
 - **Startup** — open at login, automatic update checks, version, check now.
-- **General** — Accessibility permission, HUD visibility and appearance, restore
-  defaults.
+- **General** — Accessibility permission, HUD visibility and appearance, the
+  optional macOS HUD, restore defaults.
 
 Settings are stored as JSON under `io.github.slidesense.settings.v1` in
 `UserDefaults`.
@@ -196,6 +196,12 @@ inset, a 22 pt icon box, a 12 pt gap and an 8 pt level bar with 4 pt caps. On
 macOS 26 and later the background is a real `NSGlassEffectView` (Liquid Glass);
 on macOS 13–15 it falls back to an `NSVisualEffectView` with the `.hudWindow`
 material. Both draw the same content, so the layout is identical on every OS.
+
+**Use macOS HUD** (Settings → General, off by default) shows Apple's own volume
+and brightness HUD instead. macOS only draws it for real key presses, so a slide
+is replayed as volume/brightness key presses in the same 16 steps as the keyboard
+(`SystemHUDStepper`). That needs Accessibility; without it SlideSense keeps its
+own HUD and precise levels.
 
 ### Where the bars are
 

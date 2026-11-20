@@ -110,6 +110,8 @@ public struct Settings: Codable, Equatable, Sendable {
 
     // Appearance
     public var showHUD: Bool = true
+    /// Show Apple's own volume and brightness HUD instead (needs Accessibility).
+    public var useSystemHUD: Bool = false
     public var appearance: AppearanceMode = .system
     public var openAtLogin: Bool = false
 
@@ -144,6 +146,7 @@ public struct Settings: Codable, Equatable, Sendable {
         mediaStripReverse = try c.decodeIfPresent(Bool.self, forKey: .mediaStripReverse) ?? d.mediaStripReverse
         tapToPlayEnabled = try c.decodeIfPresent(Bool.self, forKey: .tapToPlayEnabled) ?? d.tapToPlayEnabled
         showHUD = try c.decodeIfPresent(Bool.self, forKey: .showHUD) ?? d.showHUD
+        useSystemHUD = try c.decodeIfPresent(Bool.self, forKey: .useSystemHUD) ?? d.useSystemHUD
         appearance = try c.decodeIfPresent(AppearanceMode.self, forKey: .appearance) ?? d.appearance
         openAtLogin = try c.decodeIfPresent(Bool.self, forKey: .openAtLogin) ?? d.openAtLogin
         hasCompletedSetup = try c.decodeIfPresent(Bool.self, forKey: .hasCompletedSetup) ?? d.hasCompletedSetup
