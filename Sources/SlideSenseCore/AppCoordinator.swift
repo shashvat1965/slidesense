@@ -25,6 +25,14 @@ public final class AppCoordinator: NSObject, StatusItemDataSource {
     private var hapticStrength: HapticStrength = .medium
     private var lastLoginItemPreference: Bool?
 
+    /// Set while a slide is being replayed as system keys for the macOS HUD.
+    private var systemHUDStepper: SystemHUDStepper?
+
+    /// The macOS HUD only appears for real key presses, which need Accessibility.
+    private var usesSystemHUD: Bool {
+        store.settings.useSystemHUD && AccessibilityPermission.isTrusted
+    }
+
     public init(store: SettingsStore = .shared) {
         self.store = store
         self.hud = HUDController(store: store)
@@ -106,8 +114,8 @@ public final class AppCoordinator: NSObject, StatusItemDataSource {
             self?.checkForUpdates(userInitiated: false)
         }
 
-        // Media keys are the only thing that needs Accessibility, so a user who
-        // turns the media strip off is never asked for it.
+        // Only key presses need Accessibility (the media strip and the macOS HUD),
+        // so a user who turns both off is never asked for it.
         promptForAccessibilityIfNeeded()
 
         if !store.settings.hasCompletedSetup {
@@ -211,7 +219,7 @@ public final class AppCoordinator: NSObject, StatusItemDataSource {
             engine.reset()
         }
 
-        if settings.mediaStripEnabled {
+        if settings.mediaStripEnabled || settings.useSystemHUD {
             promptForAccessibilityIfNeeded()
         }
 
@@ -227,7 +235,8 @@ public final class AppCoordinator: NSObject, StatusItemDataSource {
     private var didPromptForAccessibility = false
 
     private func promptForAccessibilityIfNeeded() {
-        guard store.settings.mediaStripEnabled, !AccessibilityPermission.isTrusted else { return }
+        guard store.settings.mediaStripEnabled || store.settings.useSystemHUD,
+              !AccessibilityPermission.isTrusted else { return }
         guard !didPromptForAccessibility else { return }
         didPromptForAccessibility = true
         AccessibilityPermission.requestIfNeeded()
@@ -383,6 +392,12 @@ extension AppCoordinator: SlideEngineDelegate {
     public func slideEngine(_ engine: SlideEngine, didBeginSlide target: EdgeAction) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            if self.usesSystemHUD {
+                self.systemHUDStepper = SystemHUDStepper(start: self.level(for: target))
+                self.hud.dismiss()
+                return
+            }
+            self.systemHUDStepper = nil
             self.hud.show(edge: target, level: self.level(for: target), muted: self.audio.isMuted)
         }
     }
@@ -390,6 +405,12 @@ extension AppCoordinator: SlideEngineDelegate {
     public func slideEngine(_ engine: SlideEngine, didUpdateSlide target: EdgeAction, level: Double) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            if var stepper = self.systemHUDStepper {
+                let presses = stepper.presses(toFollow: level)
+                self.systemHUDStepper = stepper
+                self.sendSystemKeys(presses, for: target)
+                return
+            }
             switch target {
             case .volume:
                 self.audio.setLevel(level)
@@ -403,6 +424,7 @@ extension AppCoordinator: SlideEngineDelegate {
 
     public func slideEngine(_ engine: SlideEngine, didEndSlide target: EdgeAction, level: Double) {
         DispatchQueue.main.async { [weak self] in
+            self?.systemHUDStepper = nil
             self?.statusItem?.refresh()
             self?.refreshSnapshot()
         }
@@ -426,6 +448,12 @@ extension AppCoordinator: SlideEngineDelegate {
             case .previous:
                 MediaKeyController.shared.send(.previous)
                 self.hud.showMedia(.previous)
+            case .mute where self.usesSystemHUD:
+                MediaKeyController.shared.send(.mute)
+                if self.hapticsEnabled {
+                    Haptics.shared.buzz(self.hapticStrength)
+                }
+                self.statusItem?.refresh()
             case .mute:
                 self.audio.toggleMute()
                 if self.hapticsEnabled {
@@ -434,6 +462,20 @@ extension AppCoordinator: SlideEngineDelegate {
                 self.hud.show(edge: .volume, level: self.audio.level, muted: self.audio.isMuted)
                 self.statusItem?.refresh()
             }
+        }
+    }
+
+    /// Presses the volume or brightness key `count` times (negative = down),
+    /// which changes the level and shows the macOS HUD.
+    private func sendSystemKeys(_ count: Int, for target: EdgeAction) {
+        guard count != 0 else { return }
+        let key: MediaKeyController.Command
+        switch target {
+        case .volume: key = count > 0 ? .volumeUp : .volumeDown
+        case .brightness: key = count > 0 ? .brightnessUp : .brightnessDown
+        }
+        for _ in 0..<abs(count) {
+            MediaKeyController.shared.send(key)
         }
     }
 

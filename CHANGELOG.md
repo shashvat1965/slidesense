@@ -4,6 +4,15 @@ All notable changes to SlideSense are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Use macOS HUD** (Settings → General, off by default): slides show Apple's
+  own volume and brightness HUD instead of SlideSense's. macOS only draws it for
+  real key presses, so slides move in the same 16 steps as the keyboard keys.
+  Quick Mute sends the mute key, so the system mute HUD appears too. Needs
+  Accessibility; without it the app keeps its own HUD.
+
 ## [0.1.3] — 2026-11-03
 
 ### Added
