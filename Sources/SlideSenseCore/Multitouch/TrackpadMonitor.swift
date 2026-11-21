@@ -277,7 +277,9 @@ public final class TrackpadMonitor {
                     id: record.identifier,
                     x: Double(record.normalized.position.x),
                     y: y,
-                    isTouching: record.isTouching
+                    isTouching: record.isTouching,
+                    size: Double(record.size),
+                    majorAxis: Double(record.majorAxis)
                 )
             )
         }
@@ -297,7 +299,10 @@ public enum TrackpadDiagnostics {
         let monitor = TrackpadMonitor()
         monitor.onFrame = { frame in
             let summary = frame.contacts.map {
-                String(format: "id=%d x=%.3f y=%.3f %@", $0.id, $0.x, $0.y, $0.isTouching ? "touch" : "off")
+                String(
+                    format: "id=%d x=%.3f y=%.3f size=%.2f major=%.2f %@",
+                    $0.id, $0.x, $0.y, $0.size, $0.majorAxis, $0.isTouching ? "touch" : "off"
+                )
             }.joined(separator: " | ")
             print(String(format: "t=%.3f %@", frame.timestamp, summary))
         }

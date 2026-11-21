@@ -20,8 +20,11 @@ public enum Edge: String, Codable, CaseIterable, Sendable {
 public struct EdgeGeometry: Sendable {
     /// Width of the edge band as a fraction of the trackpad dimension.
     public var edgeWidth: Double
-    /// Restrict the left/right edges to the lower quarter of the trackpad.
+    /// Only let left/right slides *start* in the lower quarter of the trackpad.
     public var bottomQuarterOnly: Bool
+
+    /// Height of the start zone used by `bottomQuarterOnly`.
+    public static let startZoneHeight = 0.25
     /// Size of the top-right corner used for Quick Mute.
     public var cornerSize: Double
 
@@ -44,17 +47,25 @@ public struct EdgeGeometry: Sendable {
         let y = Double(point.y)
         guard (0...1).contains(x), (0...1).contains(y) else { return nil }
 
+        let inLeftBand = x <= edgeWidth
+        let inRightBand = x >= 1 - edgeWidth
+
+        if bottomQuarterOnly {
+            // In start-zone mode the lower quarter of each side band belongs to
+            // the slider, even where it overlaps the media strip; above that
+            // quarter the side bands are dead so a resting palm can't start a slide.
+            if (inLeftBand || inRightBand), y <= Self.startZoneHeight {
+                return inLeftBand ? .left : .right
+            }
+            return y <= edgeWidth ? .bottom : nil
+        }
+
         var candidates: [(edge: Edge, distance: Double)] = []
-        if x <= edgeWidth { candidates.append((.left, x)) }
-        if x >= 1 - edgeWidth { candidates.append((.right, 1 - x)) }
+        if inLeftBand { candidates.append((.left, x)) }
+        if inRightBand { candidates.append((.right, 1 - x)) }
         if y <= edgeWidth { candidates.append((.bottom, y)) }
 
-        guard let best = candidates.min(by: { $0.distance < $1.distance }) else { return nil }
-
-        if bottomQuarterOnly, best.edge != .bottom, y > 0.25 {
-            return nil
-        }
-        return best.edge
+        return candidates.min(by: { $0.distance < $1.distance })?.edge
     }
 
     /// The top-right corner region used for Quick Mute.
@@ -70,8 +81,9 @@ public struct EdgeGeometry: Sendable {
         case .bottom:
             return 0.75 * max(edgeWidth, 0.08)
         case .left, .right:
-            let usable = bottomQuarterOnly ? 0.25 : 1.0
-            return 0.75 * usable
+            // Bottom-quarter mode only limits where a slide may start; once
+            // it has started the finger can use the full height of the edge.
+            return 0.75
         }
     }
 }

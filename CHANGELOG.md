@@ -4,6 +4,27 @@ All notable changes to SlideSense are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Ignore While Typing** (on by default). An edge touch that starts within
+  0.5 s of a key press is ignored until the finger lifts, so a palm landing
+  mid-sentence can't change brightness or volume. Modifier keys on their own
+  don't count, so ⇧⌥ fine control and *Require Modifier* still work.
+- **Palm Rejection** (on by default). Contacts too large to be a fingertip are
+  ignored, including ones that land small and spread before moving.
+  `make dump-touches` now prints each contact's `size` and `major` axis.
+
+### Changed
+- **Bottom Quarter Only** is now a start zone and is on by default for new
+  installs. A slide must start in the lower quarter of a side band, then can
+  travel the full height at normal speed. Before, the whole range was squeezed
+  into the bottom quarter. Inside the start zone the side band now takes
+  priority over the media strip. If you saved the setting as off, it stays off.
+  Switch it on in Settings → Edges.
+- While Bottom Quarter Only is on, touching the Quick Mute corner and then
+  dragging no longer starts a volume slide. Double-tap to mute still works.
+
 ## [0.1.3] — 2026-11-03
 
 ### Added

@@ -10,12 +10,19 @@ public struct TouchContact: Sendable, Equatable {
     /// 0 = closest to you, 1 = closest to the screen.
     public var y: Double
     public var isTouching: Bool
+    /// Contact area as reported by the driver (unitless; a palm reads much
+    /// larger than a fingertip). 0 when unknown.
+    public var size: Double
+    /// Length of the contact ellipse's long axis. 0 when unknown.
+    public var majorAxis: Double
 
-    public init(id: Int32, x: Double, y: Double, isTouching: Bool) {
+    public init(id: Int32, x: Double, y: Double, isTouching: Bool, size: Double = 0, majorAxis: Double = 0) {
         self.id = id
         self.x = x
         self.y = y
         self.isTouching = isTouching
+        self.size = size
+        self.majorAxis = majorAxis
     }
 }
 
@@ -58,5 +65,14 @@ public struct ModifierState: OptionSet, Sendable {
         if flags.contains(.maskCommand) { state.insert(.command) }
         if flags.contains(.maskSecondaryFn) { state.insert(.fn) }
         return state
+    }
+}
+
+/// Recent keyboard activity, read without an event tap.
+public enum KeyboardActivity {
+    /// Seconds since any key was last pressed. Modifier keys on their own are
+    /// `flagsChanged` events, so holding ⇧⌥ or FN does not reset this.
+    public static var secondsSinceLastKeyPress: TimeInterval {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
     }
 }

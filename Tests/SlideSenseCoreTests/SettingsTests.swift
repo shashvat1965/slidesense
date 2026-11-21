@@ -30,6 +30,16 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(decoded.leftEdge, defaults.leftEdge)
         XCTAssertEqual(decoded.rightEdge, defaults.rightEdge)
         XCTAssertEqual(decoded.hapticsEnabled, defaults.hapticsEnabled)
+        XCTAssertTrue(decoded.ignoreWhileTyping)
+        XCTAssertTrue(decoded.palmRejection)
+        XCTAssertTrue(decoded.bottomQuarterOnly)
+    }
+
+    /// Someone who saved Bottom Quarter Only = off keeps it off after upgrading.
+    func testSavedBottomQuarterChoiceIsKept() throws {
+        let json = #"{"bottomQuarterOnly": false}"#
+        let decoded = try JSONDecoder().decode(Settings.self, from: Data(json.utf8))
+        XCTAssertFalse(decoded.bottomQuarterOnly)
     }
 
     func testSwappedReadsAndWritesBothEdges() {

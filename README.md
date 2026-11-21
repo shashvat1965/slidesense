@@ -26,7 +26,9 @@ matching on-screen display, quick mute, and a media strip along the bottom edge.
 | **On-screen display** | A Liquid Glass panel on macOS 26, a frosted HUD before that. |
 | **Haptics** | A physical tick as the level crosses each step. |
 | **Precise sliding** | Quarter steps instead of sixteenths — always on, or only while holding ⇧⌥. |
-| **Bottom quarter only** | Restrict the side bands to the lower quarter of the pad. |
+| **Bottom quarter only** | Slides must *start* in the lower quarter of a side band, then can use the full height. On by default. |
+| **Ignore while typing** | Edge touches that start within 0.5 s of a key press are ignored. |
+| **Palm rejection** | Palm-sized contacts are ignored. |
 | **Require a modifier** | Demand FN, Option or Control before an edge responds. |
 | **Cursor freeze** | The pointer stays put and hidden while you slide. |
 | **Quick Mute** | Double-tap the top-right corner. |
@@ -111,13 +113,29 @@ sliders still work; the media strip and any key-event fallback do not.
 | Double-tap the bottom band | Play / pause (off by default) |
 
 A slide always starts from the current system level, so you can nudge from
-wherever you are. Because the level is absolute, dragging back down gives the
+wherever you are. With **Bottom Quarter Only** on (the default), put your finger
+down in the lower quarter of an edge and drag up. To lower a level a long way,
+use two short downward strokes, because each one picks up from the current level. Because the level is absolute, dragging back down gives the
 value back instead of drifting.
 
 Multi-finger touches are left alone: as soon as a second finger lands, SlideSense
 hands the gesture back to macOS, so scrolling, zooming and swiping still work.
 Touches that start in the middle of the pad are ignored, and quick taps on an
 edge do nothing.
+
+### Mistouch protection
+
+Three guards stop a resting palm from changing anything while you type. All
+three only decide whether a slide may *start*, so once you are sliding nothing
+cuts you off:
+
+- **Bottom Quarter Only** keeps the upper three quarters of each side band
+  dead, which is where palms usually brush while typing.
+- **Ignore While Typing** ignores any edge touch that starts within 0.5 s of a
+  key press.
+- **Palm Rejection** ignores contacts larger than a fingertip. Run
+  `make dump-touches` to see the `size` your trackpad reports for a finger and
+  for a palm.
 
 ## The menu
 
@@ -141,7 +159,8 @@ Settings, so the menu stays a glance, not a control panel.
 Five tabs in a standard macOS preferences window:
 
 - **Edges** — what each side controls, band width, sensitivity, bottom-quarter
-  mode, required modifier, vertical-axis flip.
+  mode, required modifier, ignore while typing, palm rejection, vertical-axis
+  flip.
 - **Feel** — cursor freeze, precise sliding, ⇧⌥ fine control, haptics and
   strength.
 - **Media** — Quick Mute, media strip, reverse swipe, tap to play/pause. Turn

@@ -183,6 +183,8 @@ public final class AppCoordinator: NSObject, StatusItemDataSource {
         new.requireModifier = settings.requireModifier
         new.fineControlWithModifiers = settings.fineControlWithModifiers
         new.preciseSliding = settings.preciseSliding
+        new.ignoreWhileTyping = settings.ignoreWhileTyping
+        new.palmRejection = settings.palmRejection
 
         snapshotLock.lock()
         snapshot = new

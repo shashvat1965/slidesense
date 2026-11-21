@@ -17,6 +17,14 @@ public struct EngineConfiguration: Equatable, Sendable {
     public var requireModifier: ModifierRequirement = .none
     public var fineControlWithModifiers: Bool = true
     public var preciseSliding: Bool = false
+    /// Ignore edge touches that start right after a key press.
+    public var ignoreWhileTyping: Bool = true
+    /// How long after the last key press an edge touch is still ignored.
+    public var typingGuardInterval: TimeInterval = 0.5
+    /// Ignore contacts too large to be a fingertip (palms, thumb sides).
+    public var palmRejection: Bool = true
+    /// Largest `TouchContact.size` still treated as a finger.
+    public var maxFingerSize: Double = 1.6
 
     public init() {}
 }
@@ -49,6 +57,8 @@ public final class SlideEngine {
     public var configuration: () -> EngineConfiguration = { EngineConfiguration() }
     /// Live modifier state, used for the "require modifier" and fine-control options.
     public var modifiers: () -> ModifierState = { .current }
+    /// Seconds since the last key press, used for the "ignore while typing" guard.
+    public var secondsSinceLastKeyPress: () -> TimeInterval = { KeyboardActivity.secondsSinceLastKeyPress }
 
     private enum Kind {
         case slider(target: EdgeAction, edge: Edge, startLevel: Double)
@@ -110,6 +120,12 @@ public final class SlideEngine {
                 return
             }
 
+            // Palms tend to land edge-first and then spread, so keep checking
+            // the contact size until the slide has actually started.
+            if !current.moved, isPalm(point, config: config) {
+                current.kind = .ignored
+            }
+
             current.lostFrames = 0
             current.lastX = point.x
             current.lastY = point.y
@@ -120,7 +136,7 @@ public final class SlideEngine {
         }
 
         guard active.count == 1, let point = active.first else { return }
-        begin(point: CGPoint(x: point.x, y: point.y), now: frame.timestamp, config: config)
+        begin(contact: point, now: frame.timestamp, config: config)
     }
 
     /// Drops any in-flight gesture (e.g. the app was disabled).
@@ -131,8 +147,20 @@ public final class SlideEngine {
 
     // MARK: - Gesture lifecycle
 
-    private func begin(point: CGPoint, now: TimeInterval, config: EngineConfiguration) {
+    private func begin(contact: TouchContact, now: TimeInterval, config: EngineConfiguration) {
+        let point = CGPoint(x: contact.x, y: contact.y)
         guard ModifierState.modifierRequirementSatisfied(config.requireModifier, by: modifiers()) else {
+            gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: false, config: config)
+            return
+        }
+
+        // Mistouch guards: a touch that starts mid-typing or is palm-sized is
+        // ignored until it lifts. Neither check runs again once a slide moves.
+        if config.ignoreWhileTyping, secondsSinceLastKeyPress() < config.typingGuardInterval {
+            gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: false, config: config)
+            return
+        }
+        if isPalm(contact, config: config) {
             gesture = makeGesture(kind: .ignored, point: point, now: now, level: 0, fine: false, config: config)
             return
         }
@@ -176,8 +204,9 @@ public final class SlideEngine {
         let dy = point.y - gesture.startY
 
         // Touching down inside the Quick Mute corner and then sliding is a
-        // volume/brightness slide, not a failed tap.
-        if case .corner = gesture.kind, abs(dy) > 0.012 {
+        // volume/brightness slide, not a failed tap. Not in bottom-quarter
+        // mode, where the corner is at the top and slides must start low.
+        if case .corner = gesture.kind, !config.bottomQuarterOnly, abs(dy) > 0.012 {
             let target = config.rightEdge
             let level = target == .volume ? config.currentVolume : config.currentBrightness
             let steps = isFine(config: config) ? 64.0 : 16.0
@@ -297,6 +326,10 @@ public final class SlideEngine {
             consumed: false,
             lostFrames: 0
         )
+    }
+
+    private func isPalm(_ contact: TouchContact, config: EngineConfiguration) -> Bool {
+        config.palmRejection && contact.size > config.maxFingerSize
     }
 
     private func isFine(config: EngineConfiguration) -> Bool {

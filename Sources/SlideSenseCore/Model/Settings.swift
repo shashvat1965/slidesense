@@ -86,14 +86,18 @@ public struct Settings: Codable, Equatable, Sendable {
     public var rightEdge: EdgeAction = .volume
     /// How far in from the edge, as a fraction of the trackpad width/height.
     public var edgeWidth: Double = 0.18
-    /// Only react in the lower quarter of the left/right edges.
-    public var bottomQuarterOnly: Bool = false
+    /// Left/right slides must start in the lower quarter of the edge.
+    public var bottomQuarterOnly: Bool = true
     /// Multiplies how far a slide has to travel to cover the full range.
     public var sensitivity: Double = 1.0
     /// Require a modifier key to be held before an edge starts responding.
     public var requireModifier: ModifierRequirement = .none
     /// Some trackpads report the vertical axis the other way round.
     public var flipVerticalEdges: Bool = false
+    /// Ignore edge touches that start right after a key press.
+    public var ignoreWhileTyping: Bool = true
+    /// Ignore contacts too large to be a fingertip.
+    public var palmRejection: Bool = true
 
     // Feel
     public var freezeCursor: Bool = true
@@ -134,6 +138,8 @@ public struct Settings: Codable, Equatable, Sendable {
         sensitivity = try c.decodeIfPresent(Double.self, forKey: .sensitivity) ?? d.sensitivity
         requireModifier = try c.decodeIfPresent(ModifierRequirement.self, forKey: .requireModifier) ?? d.requireModifier
         flipVerticalEdges = try c.decodeIfPresent(Bool.self, forKey: .flipVerticalEdges) ?? d.flipVerticalEdges
+        ignoreWhileTyping = try c.decodeIfPresent(Bool.self, forKey: .ignoreWhileTyping) ?? d.ignoreWhileTyping
+        palmRejection = try c.decodeIfPresent(Bool.self, forKey: .palmRejection) ?? d.palmRejection
         freezeCursor = try c.decodeIfPresent(Bool.self, forKey: .freezeCursor) ?? d.freezeCursor
         preciseSliding = try c.decodeIfPresent(Bool.self, forKey: .preciseSliding) ?? d.preciseSliding
         fineControlWithModifiers = try c.decodeIfPresent(Bool.self, forKey: .fineControlWithModifiers) ?? d.fineControlWithModifiers

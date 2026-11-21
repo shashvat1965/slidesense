@@ -130,7 +130,7 @@ struct SettingsTabContent: View {
             } header: {
                 Text("Edges")
             } footer: {
-                Text("Drag along an edge of the trackpad to change its level. Bottom Quarter Only restricts gestures to the lower quarter, and Flip Vertical Edges fixes a trackpad that reports the axis backwards.")
+                Text("Drag along an edge of the trackpad to change its level. Bottom Quarter Only means a slide must start in the lower quarter of an edge, then can travel the full height. Flip Vertical Edges fixes a trackpad that reports the axis backwards.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -151,10 +151,14 @@ struct SettingsTabContent: View {
                     .pickerStyle(.menu)
                     .fixedSize()
                 }
+                Toggle("Ignore While Typing", isOn: $store.settings.ignoreWhileTyping)
+                    .toggleStyle(.switch)
+                Toggle("Palm Rejection", isOn: $store.settings.palmRejection)
+                    .toggleStyle(.switch)
             } header: {
                 Text("Sensitivity")
             } footer: {
-                Text("Sensitivity controls how far a slide has to travel to cover the full range. Require Modifier prevents accidental slides.")
+                Text("Sensitivity controls how far a slide has to travel to cover the full range. Require Modifier, Ignore While Typing and Palm Rejection prevent accidental slides.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

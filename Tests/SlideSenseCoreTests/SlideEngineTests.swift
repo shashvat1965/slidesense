@@ -38,6 +38,7 @@ final class SlideEngineTests: XCTestCase {
         configure(&config)
         engine.configuration = { config }
         engine.modifiers = { [] }
+        engine.secondsSinceLastKeyPress = { .infinity }
         let recorder = Recorder()
         engine.delegate = recorder
         return (engine, recorder)
@@ -170,11 +171,111 @@ final class SlideEngineTests: XCTestCase {
         config.requireModifier = .option
         engine.configuration = { config }
         engine.modifiers = { [] }
+        engine.secondsSinceLastKeyPress = { .infinity }
         let recorder = Recorder()
         engine.delegate = recorder
 
         engine.process(frame(at: 0.0, x: 0.95, y: 0.2))
         engine.process(frame(at: 0.02, x: 0.95, y: 0.6))
         XCTAssertTrue(recorder.updates.isEmpty)
+    }
+
+    // MARK: - Mistouch guards
+
+    private func contact(at time: TimeInterval, x: Double, y: Double, size: Double) -> TouchFrame {
+        TouchFrame(timestamp: time, contacts: [TouchContact(id: 1, x: x, y: y, isTouching: true, size: size)])
+    }
+
+    func testBottomQuarterIgnoresSlidesStartingHigh() {
+        let (engine, recorder) = makeEngine { $0.bottomQuarterOnly = true }
+        engine.process(frame(at: 0.0, x: 0.05, y: 0.6))
+        engine.process(frame(at: 0.02, x: 0.05, y: 0.3))
+        engine.process(frame(at: 0.04, x: 0.05, y: 0.1))
+        XCTAssertTrue(recorder.begins.isEmpty)
+        XCTAssertTrue(recorder.updates.isEmpty)
+    }
+
+    func testBottomQuarterSlideCanTravelFullHeight() {
+        let (engine, recorder) = makeEngine {
+            $0.bottomQuarterOnly = true
+            $0.currentVolume = 0.0
+        }
+        engine.process(frame(at: 0.0, x: 0.95, y: 0.1))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.5))
+        let midway = recorder.updates.last?.1 ?? 0
+        engine.process(frame(at: 0.04, x: 0.95, y: 0.9))
+        XCTAssertEqual(recorder.begins, [.volume])
+        // Normal speed: half the pad is roughly half the range, not all of it.
+        XCTAssertLessThan(midway, 0.7)
+        XCTAssertEqual(recorder.updates.last?.1 ?? 0, 1.0, accuracy: 0.0001)
+    }
+
+    func testBottomQuarterBlocksCornerSlide() {
+        let (engine, recorder) = makeEngine {
+            $0.bottomQuarterOnly = true
+            $0.quickMuteEnabled = true
+        }
+        engine.process(frame(at: 0.0, x: 0.95, y: 0.95))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.7))
+        XCTAssertTrue(recorder.begins.isEmpty)
+    }
+
+    func testRecentKeyPressIgnoresTouch() {
+        let (engine, recorder) = makeEngine()
+        var sinceKey: TimeInterval = 0.2
+        engine.secondsSinceLastKeyPress = { sinceKey }
+        engine.process(frame(at: 0.0, x: 0.95, y: 0.2))
+        sinceKey = 5 // typing stopped mid-touch: still ignored until lift
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.6))
+        XCTAssertTrue(recorder.begins.isEmpty)
+    }
+
+    func testOldKeyPressAllowsSlide() {
+        let (engine, recorder) = makeEngine()
+        engine.secondsSinceLastKeyPress = { 2 }
+        engine.process(frame(at: 0.0, x: 0.95, y: 0.2))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.6))
+        XCTAssertEqual(recorder.begins, [.volume])
+    }
+
+    func testKeyPressDoesNotCancelMovingSlide() {
+        let (engine, recorder) = makeEngine()
+        var sinceKey: TimeInterval = 5
+        engine.secondsSinceLastKeyPress = { sinceKey }
+        engine.process(frame(at: 0.0, x: 0.95, y: 0.2))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.4))
+        sinceKey = 0
+        engine.process(frame(at: 0.04, x: 0.95, y: 0.6))
+        XCTAssertEqual(recorder.updates.count, 2)
+    }
+
+    func testTypingGuardCanBeDisabled() {
+        let (engine, recorder) = makeEngine { $0.ignoreWhileTyping = false }
+        engine.secondsSinceLastKeyPress = { 0 }
+        engine.process(frame(at: 0.0, x: 0.95, y: 0.2))
+        engine.process(frame(at: 0.02, x: 0.95, y: 0.6))
+        XCTAssertEqual(recorder.begins, [.volume])
+    }
+
+    func testPalmSizedContactIsIgnored() {
+        let (engine, recorder) = makeEngine()
+        engine.process(contact(at: 0.0, x: 0.95, y: 0.2, size: 4))
+        engine.process(contact(at: 0.02, x: 0.95, y: 0.6, size: 4))
+        XCTAssertTrue(recorder.begins.isEmpty)
+    }
+
+    func testContactThatGrowsBeforeMovingIsIgnored() {
+        let (engine, recorder) = makeEngine()
+        engine.process(contact(at: 0.0, x: 0.95, y: 0.2, size: 0.8))
+        engine.process(contact(at: 0.01, x: 0.95, y: 0.202, size: 3))
+        engine.process(contact(at: 0.03, x: 0.95, y: 0.6, size: 3))
+        XCTAssertTrue(recorder.begins.isEmpty)
+    }
+
+    func testFingerSizedContactSlides() {
+        let (engine, recorder) = makeEngine()
+        engine.process(contact(at: 0.0, x: 0.95, y: 0.2, size: 0.8))
+        engine.process(contact(at: 0.02, x: 0.95, y: 0.6, size: 0.9))
+        XCTAssertEqual(recorder.begins, [.volume])
     }
 }

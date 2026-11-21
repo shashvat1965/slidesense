@@ -25,6 +25,22 @@ final class EdgeGeometryTests: XCTestCase {
         XCTAssertNil(geometry.edge(at: CGPoint(x: 0.05, y: 0.7)))
     }
 
+    func testBottomQuarterSideBandBeatsMediaStrip() {
+        let geometry = EdgeGeometry(edgeWidth: 0.2, bottomQuarterOnly: true)
+        // Closer to the bottom than the left, but inside the start zone.
+        XCTAssertEqual(geometry.edge(at: CGPoint(x: 0.15, y: 0.02)), .left)
+        XCTAssertEqual(geometry.edge(at: CGPoint(x: 0.9, y: 0.05)), .right)
+        // The middle of the bottom band is still the media strip.
+        XCTAssertEqual(geometry.edge(at: CGPoint(x: 0.5, y: 0.05)), .bottom)
+    }
+
+    func testBottomQuarterKeepsFullTravelSpan() {
+        let on = EdgeGeometry(bottomQuarterOnly: true)
+        let off = EdgeGeometry(bottomQuarterOnly: false)
+        XCTAssertEqual(on.travelSpan(for: .left), 0.75, accuracy: 1e-9)
+        XCTAssertEqual(off.travelSpan(for: .right), 0.75, accuracy: 1e-9)
+    }
+
     func testQuickMuteCorner() {
         let geometry = EdgeGeometry()
         XCTAssertTrue(geometry.isQuickMuteCorner(CGPoint(x: 0.95, y: 0.95)))
