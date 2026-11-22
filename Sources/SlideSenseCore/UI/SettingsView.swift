@@ -79,6 +79,9 @@ struct SettingsView: View {
                 .tabItem { Text(SettingsTab.general.title) }
                 .tag(SettingsTab.general)
         }
+        // A margin around the tab view keeps its tab strip clear of the
+        // title bar and its box off the window edges.
+        .padding(SettingsWindowController.Layout.margin)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

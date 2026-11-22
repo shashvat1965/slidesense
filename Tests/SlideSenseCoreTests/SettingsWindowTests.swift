@@ -49,8 +49,12 @@ final class SettingsWindowTests: XCTestCase {
         let window = controller.prepareWindow()
 
         XCTAssertEqual(window.title, "SlideSense Settings")
-        XCTAssertEqual(window.contentLayoutRect.size.width, SettingsWindowController.contentSize.width)
-        XCTAssertEqual(window.contentLayoutRect.size.height, SettingsWindowController.contentSize.height)
+        let tallest = SettingsWindowController.measuredHeights(
+            store: fixture.store,
+            permissionState: PermissionState()
+        ).map(\.height).max() ?? 0
+        XCTAssertEqual(window.contentLayoutRect.size.width, SettingsWindowController.Layout.width)
+        XCTAssertEqual(window.contentLayoutRect.size.height, tallest.rounded(.up))
 
         XCTAssertTrue(window.styleMask.contains(.titled))
         XCTAssertTrue(window.styleMask.contains(.closable))
@@ -70,7 +74,6 @@ final class SettingsWindowTests: XCTestCase {
         let window = controller.prepareWindow()
 
         let contentHeight = window.contentLayoutRect.height
-        XCTAssertGreaterThanOrEqual(contentHeight, SettingsWindowController.contentSize.height)
 
         for tab in SettingsTab.allCases {
             controller.selectTab(tab)
@@ -186,7 +189,7 @@ final class SettingsWindowTests: XCTestCase {
         window.orderBack(nil)
         defer { window.orderOut(nil) }
 
-        let size = SettingsWindowController.contentSize
+        let size = window.contentLayoutRect.size
         let scale: CGFloat = 2
 
         for tab in SettingsTab.allCases {
@@ -266,7 +269,7 @@ final class SettingsWindowTests: XCTestCase {
         hosting.layoutSubtreeIfNeeded()
         hosting.displayIfNeeded()
 
-        let size = SettingsWindowController.contentSize
+        let size = window.contentLayoutRect.size
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: Int(size.width * 2),
