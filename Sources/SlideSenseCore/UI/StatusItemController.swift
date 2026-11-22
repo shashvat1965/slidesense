@@ -30,6 +30,9 @@ public final class StatusItemController {
     /// The installed menu, exposed for tests and snapshot tooling.
     var menu: NSMenu? { statusItem?.menu }
 
+    /// Whether the item shows in the menu bar, exposed for tests.
+    var isVisible: Bool { statusItem?.isVisible ?? false }
+
     /// Called just before the menu is displayed, so the app can refresh the
     /// live readouts without a timer running in the background.
     public var willOpen: (() -> Void)? {
@@ -91,6 +94,7 @@ public final class StatusItemController {
     /// Cheap update called about once a second and after every settings change.
     /// Never rebuilds the menu, so an open menu keeps its highlight.
     public func refresh() {
+        statusItem?.isVisible = store.settings.showMenuBarIcon
         updateButtonAppearance()
         updateReadouts()
         enabledItem?.state = store.settings.enabled ? .on : .off

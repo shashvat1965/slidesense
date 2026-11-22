@@ -102,6 +102,19 @@ final class StatusItemTests: XCTestCase {
         XCTAssertEqual(enabled?.state, .on)
     }
 
+    func testMenuBarIconFollowsSettings() {
+        let controller = makeController()
+        XCTAssertTrue(controller.isVisible)
+
+        store.settings.showMenuBarIcon = false
+        controller.refresh()
+        XCTAssertFalse(controller.isVisible)
+
+        store.settings.showMenuBarIcon = true
+        controller.refresh()
+        XCTAssertTrue(controller.isVisible)
+    }
+
     func testMutedReadout() {
         let controller = makeController()
         source.isMuted = true

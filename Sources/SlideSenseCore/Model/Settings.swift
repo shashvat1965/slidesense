@@ -110,6 +110,9 @@ public struct Settings: Codable, Equatable, Sendable {
 
     // Appearance
     public var showHUD: Bool = true
+    /// When off, the app keeps running without a menu bar item; opening the
+    /// app again shows Settings.
+    public var showMenuBarIcon: Bool = true
     public var appearance: AppearanceMode = .system
     public var openAtLogin: Bool = false
 
@@ -144,6 +147,7 @@ public struct Settings: Codable, Equatable, Sendable {
         mediaStripReverse = try c.decodeIfPresent(Bool.self, forKey: .mediaStripReverse) ?? d.mediaStripReverse
         tapToPlayEnabled = try c.decodeIfPresent(Bool.self, forKey: .tapToPlayEnabled) ?? d.tapToPlayEnabled
         showHUD = try c.decodeIfPresent(Bool.self, forKey: .showHUD) ?? d.showHUD
+        showMenuBarIcon = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarIcon) ?? d.showMenuBarIcon
         appearance = try c.decodeIfPresent(AppearanceMode.self, forKey: .appearance) ?? d.appearance
         openAtLogin = try c.decodeIfPresent(Bool.self, forKey: .openAtLogin) ?? d.openAtLogin
         hasCompletedSetup = try c.decodeIfPresent(Bool.self, forKey: .hasCompletedSetup) ?? d.hasCompletedSetup

@@ -339,6 +339,17 @@ struct SettingsTabContent: View {
             }
 
             Section {
+                Toggle("Show Menu Bar Icon", isOn: $store.settings.showMenuBarIcon)
+                    .toggleStyle(.switch)
+            } header: {
+                Text("Menu Bar")
+            } footer: {
+                Text("With the icon hidden, SlideSense keeps working. Open it again from Applications or Spotlight to get back to these settings.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Button("Restore Defaults…") {
                     showRestoreConfirmation = true
                 }
