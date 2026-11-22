@@ -38,6 +38,9 @@ jobs:
           set -euo pipefail
           version="${{ steps.version.outputs.version }}"
           make app
+          for arch in arm64 x86_64; do
+            lipo -verify_arch "$arch" SlideSense.app/Contents/MacOS/SlideSense
+          done
           codesign --verify --deep --strict --verbose=2 SlideSense.app
           zip -qry -X "SlideSense-${version}.zip" SlideSense.app
           shasum -a 256 "SlideSense-${version}.zip" | tee checksums.txt

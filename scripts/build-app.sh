@@ -11,8 +11,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 CONFIG="release"
+# Release builds are universal so the app also runs on Intel Macs; debug
+# builds stay native to keep local iteration fast.
+ARCH_FLAGS=(--arch arm64 --arch x86_64)
 if [[ "${1:-}" == "--debug" ]]; then
     CONFIG="debug"
+    ARCH_FLAGS=()
 fi
 
 VERSION="$(cat "$ROOT/VERSION" 2>/dev/null || echo "0.1.0")"
@@ -21,9 +25,9 @@ APP="$ROOT/$APP_NAME.app"
 BUNDLE_ID="io.github.slidesense"
 
 echo "==> Building ($CONFIG)"
-swift build -c "$CONFIG" --product SlideSense
+swift build -c "$CONFIG" --product SlideSense ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"}
 
-BIN_PATH="$(swift build -c "$CONFIG" --show-bin-path)/SlideSense"
+BIN_PATH="$(swift build -c "$CONFIG" ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} --show-bin-path)/SlideSense"
 if [[ ! -x "$BIN_PATH" ]]; then
     echo "error: built binary not found at $BIN_PATH" >&2
     exit 1
