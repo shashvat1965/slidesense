@@ -79,6 +79,9 @@ struct SettingsView: View {
                 .tabItem { Text(SettingsTab.general.title) }
                 .tag(SettingsTab.general)
         }
+        // A margin around the tab view keeps its tab strip clear of the
+        // title bar and its box off the window edges.
+        .padding(SettingsWindowController.Layout.margin)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -331,6 +334,17 @@ struct SettingsTabContent: View {
                 Text("HUD")
             } footer: {
                 Text("The HUD appears while you slide an edge.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Show Menu Bar Icon", isOn: $store.settings.showMenuBarIcon)
+                    .toggleStyle(.switch)
+            } header: {
+                Text("Menu Bar")
+            } footer: {
+                Text("With the icon hidden, SlideSense keeps working. Open it again from Applications or Spotlight to get back to these settings.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

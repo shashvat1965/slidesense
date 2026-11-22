@@ -29,22 +29,10 @@ public final class SettingsWindowController {
     enum Layout {
         static let width: CGFloat = 540
 
-        /// The fixed content size shared by every tab, measured from the
-        /// tallest tab at `width`. A window that changes size when the user
-        /// switches tabs is the Apple anti-pattern; this one never moves.
-        ///
-        /// These are content heights only: the tab strip lives in the window's
-        /// titlebar (52 pt), not in the content view. Measured at 540 pt wide
-        /// with the footnotes wrapped: edges 515, feel 387, media 332,
-        /// startup 344, general 426 — so 515 is the max.
-        static let height: CGFloat = 515
+        /// Space between the tab view and the window's edges.
+        static let margin: CGFloat = 20
 
         static let autosaveName = "SlideSenseSettingsWindow"
-    }
-
-    /// The documented, fixed content size of the settings window.
-    public static var contentSize: NSSize {
-        NSSize(width: Layout.width, height: Layout.height)
     }
 
     private let store: SettingsStore
@@ -130,8 +118,10 @@ public final class SettingsWindowController {
 
     // MARK: - Measurement
 
-    /// Fitting height of every tab at the shared window width. Exposed so the
-    /// tests can verify that no tab is clipped by the fixed window height.
+    /// Fitting height of the whole window content with each tab selected, at
+    /// the shared window width. The window takes the tallest, so it never
+    /// changes size when the user switches tabs (the Apple anti-pattern) and
+    /// no tab is clipped. Exposed so the tests can check that.
     static func measuredHeights(
         store: SettingsStore,
         permissionState: PermissionState
@@ -150,12 +140,13 @@ public final class SettingsWindowController {
         // reports the form's natural width (wider than the window) and the
         // footnotes would not be wrapped, so the height would come out short.
         //
-        // The tab content, not the TabView: the tab strip is hoisted into the
-        // window's titlebar, so it never consumes content height.
-        let view = SettingsTabContent(
-            tab: tab,
+        // The whole TabView, not only the tab's form: depending on the macOS
+        // version the tab strip takes content height, and text metrics change
+        // too, so no fixed height fits every release.
+        let view = SettingsView(
             store: store,
-            permissionState: permissionState
+            permissionState: permissionState,
+            selection: .constant(tab)
         )
         .frame(width: Layout.width)
         let hosting = NSHostingView(rootView: view)
@@ -163,13 +154,12 @@ public final class SettingsWindowController {
         return hosting.fittingSize.height
     }
 
-    /// The window height: the tallest tab, but never below the documented
-    /// size, so the window only ever grows if a tab outgrows its budget.
+    /// The window height: the tallest tab.
     private func measuredHeight() -> CGFloat {
-        let tallest = Self.measuredHeights(store: store, permissionState: permissionState)
+        Self.measuredHeights(store: store, permissionState: permissionState)
             .map(\.height)
-            .max() ?? Layout.height
-        return max(Layout.height, tallest.rounded(.up))
+            .max()?
+            .rounded(.up) ?? 0
     }
 
     // MARK: - Testing hooks

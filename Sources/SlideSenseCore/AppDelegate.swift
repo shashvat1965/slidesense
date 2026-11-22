@@ -14,6 +14,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         coordinator?.stop()
     }
 
+    /// Opening the running app again (Finder, Spotlight, Launchpad) shows
+    /// Settings, which is the way back when the menu bar icon is hidden.
+    public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        coordinator?.requestSettings()
+        return false
+    }
+
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }

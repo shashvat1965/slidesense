@@ -30,6 +30,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(decoded.leftEdge, defaults.leftEdge)
         XCTAssertEqual(decoded.rightEdge, defaults.rightEdge)
         XCTAssertEqual(decoded.hapticsEnabled, defaults.hapticsEnabled)
+        XCTAssertTrue(decoded.showMenuBarIcon, "settings saved before the option keep the icon")
     }
 
     func testSwappedReadsAndWritesBothEdges() {
