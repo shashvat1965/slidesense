@@ -352,23 +352,6 @@ public final class AppCoordinator: NSObject, StatusItemDataSource {
     }
 
     public func requestAccessibility() {
-        observers.append(
-            NotificationCenter.default.addObserver(
-                forName: .slideSenseCheckForUpdates,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                self?.checkForUpdates(userInitiated: true)
-            }
-        )
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
-            self?.checkForUpdates(userInitiated: false)
-        }
-
-        // Media keys are the only thing that needs Accessibility, so a user who
-        // turns the media strip off is never asked for it.
-        promptForAccessibilityIfNeeded()
         AccessibilityPermission.openSystemSettings()
     }
 
