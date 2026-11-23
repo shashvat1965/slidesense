@@ -28,7 +28,7 @@ matching on-screen display, quick mute, and a media strip along the bottom edge.
 | **Precise sliding** | Quarter steps instead of sixteenths — always on, or only while holding ⇧⌥. |
 | **Bottom quarter only** | Restrict the side bands to the lower quarter of the pad. |
 | **Require a modifier** | Demand FN, Option or Control before an edge responds. |
-| **Cursor freeze** | The pointer stays put and hidden while you slide. |
+| **Cursor freeze** | The pointer stays put while you slide. |
 | **Quick Mute** | Double-tap the top-right corner. |
 | **Media strip** | Swipe along the bottom edge to skip; double-tap to play/pause. |
 | **Swap sides** | Brightness on the right if you prefer. |

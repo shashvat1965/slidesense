@@ -8,18 +8,20 @@ import CoreGraphics
 /// a slide and warp it back on every frame. Warping is used rather than
 /// `CGAssociateMouseAndMouseCursorPosition(false)` so a crash can never leave the
 /// mouse frozen.
+///
+/// The pointer is deliberately not hidden. `CGDisplayHideCursor` keeps a
+/// per-app hide count that only takes effect while this app is frontmost: a
+/// menu bar app is in the background during a slide, so hiding did nothing
+/// visible, and any unbalanced count made the pointer vanish as soon as the
+/// settings window came forward.
 public final class CursorFreezer {
     private var anchor: CGPoint?
-    private var hidden = false
 
     public init() {}
 
     public func begin() {
         guard anchor == nil else { return }
         anchor = CGEvent(source: nil)?.location
-        if CGDisplayHideCursor(CGMainDisplayID()) == .success {
-            hidden = true
-        }
     }
 
     /// Called on every touch frame while a slide is active.
@@ -29,11 +31,6 @@ public final class CursorFreezer {
     }
 
     public func end() {
-        guard anchor != nil else { return }
         anchor = nil
-        if hidden {
-            CGDisplayShowCursor(CGMainDisplayID())
-            hidden = false
-        }
     }
 }

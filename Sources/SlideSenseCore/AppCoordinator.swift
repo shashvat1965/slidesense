@@ -121,7 +121,7 @@ public final class AppCoordinator: NSObject, StatusItemDataSource {
         statusItem?.willOpen = nil
         monitor.stop()
         engine.reset()
-        freezer.end()
+        endFreeze()
         observers.forEach(NotificationCenter.default.removeObserver)
         observers.removeAll()
     }
@@ -149,9 +149,15 @@ public final class AppCoordinator: NSObject, StatusItemDataSource {
             }
             if freezeCursorEnabled { freezer.hold() }
         } else if frozen {
-            frozen = false
-            freezer.end()
+            endFreeze()
         }
+    }
+
+    /// Releases the pointer. Every path that abandons a slide goes through
+    /// here, so `frozen` can never outlive the gesture that set it.
+    private func endFreeze() {
+        frozen = false
+        freezer.end()
     }
 
     private func startMonitoring() {
@@ -209,6 +215,7 @@ public final class AppCoordinator: NSObject, StatusItemDataSource {
         } else {
             monitor.stop()
             engine.reset()
+            endFreeze()
         }
 
         if settings.mediaStripEnabled {
